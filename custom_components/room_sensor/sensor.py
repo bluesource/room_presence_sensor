@@ -1,5 +1,6 @@
 import logging
 import homeassistant.helpers.config_validation as cv
+import datetime
 from homeassistant.util import Throttle, dt
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -109,37 +110,36 @@ class RoomPresenceSensor(SensorEntity):
 
     def update(self):
         """Get the latest data from the REST API."""
-        try:
-            server_tz = self.account.default_timezone
+        # try:
+        server_tz = self.account.default_timezone
 
-            start = EWSDate.today()
+        start = datetime.now(server_tz) - timedelta(days=1)
+        end = datetime.now(server_tz) + timedelta(days=1)
 
-            end = start + timedelta(days=1)
+        # use calendar.view to get also reocurring events
+        appointments = self.account.calendar.view(
+            start=start,
+            end=end,
+        )
 
-            appointments = self.account.calendar.filter(start__range=(start, end))
+        today = EWSDateTime.now(tz=server_tz)
 
-            today = EWSDateTime.now(tz=server_tz)
+        found_appointment_with_prio = "free"
+        for item in appointments:
+            _LOGGER.info(
+                "Found item: "
+                + str(item.subject)
+                + "starts: "
+                + str(item.start)
+                + " ends: "
+                + str(item.end)
+            )
+            if item.start <= today <= item.end:
+                print()
 
-            found_appointment_with_prio = "free"
-            for item in appointments:
-                if item.start <= today <= item.end:
-                    # _LOGGER.debug(
-                    #     "Found calender item in which is active now: "
-                    #     + item.subject
-                    #     + "starts: "
-                    #     + item.start
-                    #     + " ends: "
-                    #     + item.end
-                    # )
-                    if item.importance == "High":
-                        found_appointment_with_prio = "high"
-                    else:
-                        found_appointment_with_prio = "normal"
+                if item.importance == "High":
+                    found_appointment_with_prio = "high"
+                else:
+                    found_appointment_with_prio = "normal"
 
-            self._attr_native_value = found_appointment_with_prio
-
-        except:
-            _LOGGER.error("Error fetching data")
-
-
-# serien teste mit löschen, anders licht mi importance High
+        self._attr_native_value = found_appointment_with_prio
